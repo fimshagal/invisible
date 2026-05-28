@@ -12,7 +12,7 @@ export default function App() {
       <header className="header">
         <h1>Invisible</h1>
         <p className="subtitle">
-          Ховає зашифроване повідомлення всередині зображення (LSB steganography + AES-256-GCM)
+          Hide encrypted messages inside images (LSB steganography + AES-256-GCM)
         </p>
         <nav className="tabs">
           <button
@@ -20,14 +20,14 @@ export default function App() {
             className={tab === 'encrypt' ? 'tab active' : 'tab'}
             onClick={() => setTab('encrypt')}
           >
-            Шифрування
+            Encrypt
           </button>
           <button
             type="button"
             className={tab === 'decrypt' ? 'tab active' : 'tab'}
             onClick={() => setTab('decrypt')}
           >
-            Дешифрування
+            Decrypt
           </button>
         </nav>
       </header>

@@ -42,7 +42,7 @@ export function EncryptPanel() {
       setImageInfo(img);
     } catch {
       setImageInfo(null);
-      setStatus({ type: 'err', text: 'Не вдалося прочитати зображення' });
+      setStatus({ type: 'err', text: 'Failed to read image' });
     }
   }, []);
 
@@ -57,22 +57,22 @@ export function EncryptPanel() {
 
   const handleEncrypt = async () => {
     if (!imageFile || !imageInfo || !secret || !message) {
-      setStatus({ type: 'err', text: 'Заповніть усі поля' });
+      setStatus({ type: 'err', text: 'Please fill in all fields' });
       return;
     }
 
-    setStatus({ type: 'loading', text: 'Шифрування…' });
+    setStatus({ type: 'loading', text: 'Encrypting…' });
 
     try {
       const { pngBlob } = await embedMessageInImage(imageInfo, message, secret);
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       const url = URL.createObjectURL(pngBlob);
       setResultUrl(url);
-      setStatus({ type: 'ok', text: 'Готово! Збережіть PNG — використовуйте саме PNG для передачі.' });
+      setStatus({ type: 'ok', text: 'Done! Save the PNG — always use PNG when sharing.' });
     } catch (err) {
       setStatus({
         type: 'err',
-        text: err instanceof Error ? err.message : 'Помилка шифрування',
+        text: err instanceof Error ? err.message : 'Encryption failed',
       });
     }
   };
@@ -88,7 +88,7 @@ export function EncryptPanel() {
   return (
     <section className="panel">
       <div className="field">
-        <label htmlFor="enc-image">Зображення (PNG/JPEG/WebP…)</label>
+        <label htmlFor="enc-image">Image (PNG / JPEG / WebP…)</label>
         <input id="enc-image" type="file" accept="image/*" onChange={onImageChange} />
         {preview && (
           <div className="preview-row">
@@ -96,10 +96,10 @@ export function EncryptPanel() {
             {capacity && (
               <div className="meta">
                 <p>
-                  {imageInfo!.width}×{imageInfo!.height} px — місткість ~{' '}
-                  {formatBytes(capacity.maxPayloadBytes)} даних
+                  {imageInfo!.width}×{imageInfo!.height} px — capacity ~{' '}
+                  {formatBytes(capacity.maxPayloadBytes)} of data
                 </p>
-                <p>Макс. довжина повідомлення: ~{capacity.maxMessageChars} символів</p>
+                <p>Max message length: ~{capacity.maxMessageChars} characters</p>
               </div>
             )}
           </div>
@@ -107,48 +107,48 @@ export function EncryptPanel() {
       </div>
 
       <div className="field">
-        <label htmlFor="enc-secret">Таємний ключ</label>
+        <label htmlFor="enc-secret">Secret key</label>
         <input
           id="enc-secret"
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
-          placeholder="Будь-який рядок"
+          placeholder="Any string"
           autoComplete="off"
         />
       </div>
 
       <div className="field">
-        <label htmlFor="enc-message">Повідомлення</label>
+        <label htmlFor="enc-message">Message</label>
         <textarea
           id="enc-message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Текст для приховування в зображенні"
+          placeholder="Text to hide inside the image"
           rows={4}
         />
         {message && minDims && !fits && (
           <p className="hint warn">
-            Зображення замале. Потрібно мінімум ~{minDims.minSide}×{minDims.minSide} px (
-            {minDims.minPixels.toLocaleString()} пікселів).
+            Image too small. Need at least ~{minDims.minSide}×{minDims.minSide} px (
+            {minDims.minPixels.toLocaleString()} pixels).
           </p>
         )}
         {message && capacity && fits && (
           <p className="hint">
-            Потрібно {formatBytes(requiredBytes)} з{' '}
-            {formatBytes(getCapacityBytes(imageInfo!.width, imageInfo!.height))} доступних
-            (зарезервовано до {capacity.maxOffsetPixels} px offset)
+            Requires {formatBytes(requiredBytes)} of{' '}
+            {formatBytes(getCapacityBytes(imageInfo!.width, imageInfo!.height))} available
+            (up to {capacity.maxOffsetPixels} px offset reserved)
           </p>
         )}
       </div>
 
       <div className="actions">
         <button type="button" className="btn primary" onClick={handleEncrypt} disabled={!fits}>
-          Зашифрувати і сховати
+          Encrypt & hide
         </button>
         {resultUrl && (
           <button type="button" className="btn secondary" onClick={handleDownload}>
-            Завантажити PNG
+            Download PNG
           </button>
         )}
       </div>

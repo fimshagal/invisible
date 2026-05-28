@@ -25,27 +25,27 @@ export function DecryptPanel() {
     try {
       await loadImageFromFile(file);
     } catch {
-      setStatus({ type: 'err', text: 'Не вдалося прочитати зображення' });
+      setStatus({ type: 'err', text: 'Failed to read image' });
     }
   }, []);
 
   const handleDecrypt = async () => {
     if (!imageFile || !secret) {
-      setStatus({ type: 'err', text: 'Додайте зображення і таємний ключ' });
+      setStatus({ type: 'err', text: 'Add an image and secret key' });
       return;
     }
 
-    setStatus({ type: 'loading', text: 'Дешифрування…' });
+    setStatus({ type: 'loading', text: 'Decrypting…' });
     setResult(null);
 
     try {
       const text = await decryptFromFile(imageFile, secret);
       setResult(text);
-      setStatus({ type: 'ok', text: 'Повідомлення знайдено!' });
+      setStatus({ type: 'ok', text: 'Message found!' });
     } catch (err) {
       setStatus({
         type: 'err',
-        text: err instanceof Error ? err.message : 'Помилка дешифрування',
+        text: err instanceof Error ? err.message : 'Decryption failed',
       });
     }
   };
@@ -53,26 +53,26 @@ export function DecryptPanel() {
   return (
     <section className="panel">
       <div className="field">
-        <label htmlFor="dec-image">Зображення з прихованим повідомленням</label>
+        <label htmlFor="dec-image">Image with hidden message</label>
         <input id="dec-image" type="file" accept="image/*" onChange={onImageChange} />
         {preview && <img src={preview} alt="Preview" className="preview" />}
       </div>
 
       <div className="field">
-        <label htmlFor="dec-secret">Таємний ключ</label>
+        <label htmlFor="dec-secret">Secret key</label>
         <input
           id="dec-secret"
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
-          placeholder="Той самий ключ, що використовувався при шифруванні"
+          placeholder="Same key used when encrypting"
           autoComplete="off"
         />
       </div>
 
       <div className="actions">
         <button type="button" className="btn primary" onClick={handleDecrypt}>
-          Дешифрувати
+          Decrypt
         </button>
       </div>
 
@@ -84,7 +84,7 @@ export function DecryptPanel() {
 
       {result !== null && (
         <div className="result message-box">
-          <label>Повідомлення:</label>
+          <label>Message:</label>
           <pre>{result}</pre>
         </div>
       )}

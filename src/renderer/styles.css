@@ -6,9 +6,10 @@
 
 :root {
   color-scheme: dark;
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --border: #2a2f3d;
+  --bg: #0a0c12;
+  --surface: rgba(22, 26, 38, 0.72);
+  --surface-solid: #161a26;
+  --border: rgba(255, 255, 255, 0.08);
   --text: #e8eaef;
   --muted: #8b93a7;
   --accent: #6c8cff;
@@ -20,11 +21,39 @@
   line-height: 1.5;
 }
 
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
   min-height: 100vh;
+  color: var(--text);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(56, 48, 120, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 80%, rgba(24, 80, 100, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 60% 40%, rgba(80, 40, 100, 0.18) 0%, transparent 45%),
+    linear-gradient(
+      135deg,
+      #07080d 0%,
+      #0e1020 18%,
+      #121828 36%,
+      #0d1522 54%,
+      #101a28 72%,
+      #0a0e18 88%,
+      #07080d 100%
+    );
+  background-size: 100% 100%, 100% 100%, 100% 100%, 400% 400%;
+  animation: gradient-shift 18s ease infinite;
 }
 
 .app {
@@ -55,7 +84,7 @@ body {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
   color: var(--muted);
   cursor: pointer;
   font-size: 0.9rem;
@@ -64,13 +93,15 @@ body {
 
 .tab:hover {
   color: var(--text);
-  border-color: var(--muted);
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .tab.active {
   background: var(--surface);
   color: var(--text);
   border-color: var(--accent);
+  backdrop-filter: blur(12px);
 }
 
 .panel {
@@ -79,6 +110,8 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
 }
 
 .field {
@@ -104,16 +137,18 @@ body {
   padding: 0.65rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg);
+  background: rgba(7, 8, 13, 0.6);
   color: var(--text);
   font: inherit;
   resize: vertical;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .field input:focus,
 .field textarea:focus {
   outline: none;
   border-color: var(--accent);
+  background: rgba(7, 8, 13, 0.85);
 }
 
 .preview-row {
@@ -163,7 +198,11 @@ body {
   font: inherit;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn:disabled {
@@ -181,12 +220,13 @@ body {
 }
 
 .btn.secondary {
-  background: var(--border);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .btn.secondary:hover {
-  background: #3a4155;
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .status {
@@ -221,10 +261,16 @@ body {
 .message-box pre {
   margin: 0.5rem 0 0;
   padding: 1rem;
-  background: var(--bg);
+  background: rgba(7, 8, 13, 0.6);
   border: 1px solid var(--border);
   border-radius: 8px;
   white-space: pre-wrap;
   word-break: break-word;
   font-family: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
 }
