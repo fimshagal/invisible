@@ -33,25 +33,32 @@ import {
   DecryptError,
 } from './types';
 import type { PcmAudio } from './audio-types';
+import { flattenAlphaOntoWhite } from './image-normalize';
 
 const encoder = new TextEncoder();
 
 export async function loadImageFromFile(file: File | Blob): Promise<RgbaImage> {
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await createImageBitmap(file, {
+    premultiplyAlpha: 'none',
+    colorSpaceConversion: 'none',
+  });
   const canvas = document.createElement('canvas');
   canvas.width = bitmap.width;
   canvas.height = bitmap.height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('Canvas 2D not available');
 
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = new Uint8ClampedArray(imageData.data);
+  flattenAlphaOntoWhite(data);
+
   return {
     width: canvas.width,
     height: canvas.height,
-    data: new Uint8ClampedArray(imageData.data),
+    data,
   };
 }
 
@@ -298,5 +305,7 @@ export {
 } from './audio';
 
 export * from './audio-types';
+
+export { flattenAlphaOntoWhite, normalizeTransparentPixels } from './image-normalize';
 
 export * from './types';
