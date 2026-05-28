@@ -1,0 +1,12 @@
+{
+  "name": "@invisible/stego-crypto",
+  "version": "1.0.0",
+  "description": "Portable steganography + AES-256-GCM encryption module",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "keywords": ["steganography", "encryption", "aes", "lsb"],
+  "license": "MIT"
+}
