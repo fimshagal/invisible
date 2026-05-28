@@ -5,6 +5,7 @@ import {
   getCapacityInfo,
   getMinimumDimensions,
   bytesRequiredForMessage,
+  getCapacityBytes,
   type RgbaImage,
 } from '@stego-crypto/index';
 
@@ -51,7 +52,7 @@ export function EncryptPanel() {
   const minDims = message ? getMinimumDimensions(messageBytes) : null;
   const fits =
     capacity && message
-      ? requiredBytes <= capacity.maxPayloadBytes + 9
+      ? requiredBytes <= getCapacityBytes(imageInfo!.width, imageInfo!.height)
       : true;
 
   const handleEncrypt = async () => {
@@ -134,8 +135,9 @@ export function EncryptPanel() {
         )}
         {message && capacity && fits && (
           <p className="hint">
-            Потрібно {formatBytes(requiredBytes)} з {formatBytes(capacity.maxPayloadBytes + 9)}{' '}
-            доступних
+            Потрібно {formatBytes(requiredBytes)} з{' '}
+            {formatBytes(getCapacityBytes(imageInfo!.width, imageInfo!.height))} доступних
+            (зарезервовано до {capacity.maxOffsetPixels} px offset)
           </p>
         )}
       </div>
@@ -155,13 +157,6 @@ export function EncryptPanel() {
         <p className={`status ${status.type}`} role="status">
           {status.text}
         </p>
-      )}
-
-      {resultUrl && (
-        <div className="result">
-          <p>Результат (візуально не відрізняється від оригіналу):</p>
-          <img src={resultUrl} alt="Result" className="preview" />
-        </div>
       )}
     </section>
   );

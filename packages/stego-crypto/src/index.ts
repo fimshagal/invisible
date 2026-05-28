@@ -4,8 +4,12 @@ import {
   embedBytesInImage,
   extractBytesFromImage,
   parseStegoPayload,
+  pickRandomOffset,
+  readHeader,
+  readOffsetBootstrap,
+  writeOffsetBootstrap,
+  headerSizeFor,
 } from './stego';
-import { readHeader } from './stego';
 import {
   assertImageFits,
   bytesRequiredForMessage,
@@ -14,7 +18,11 @@ import {
 } from './capacity';
 import {
   HEADER_SIZE,
+  HEADER_SIZE_V1,
   ImageTooSmallError,
+  OFFSET_BOOTSTRAP_SIZE,
+  VERSION,
+  VERSION_V1,
   type EmbedResult,
   type RgbaImage,
   DecryptError,
@@ -72,16 +80,21 @@ export async function embedMessageInImage(
   const required = bytesRequiredForMessage(messageBytes);
   const available = getMaxPayloadBytes(image.width, image.height);
 
-  if (required > available) {
-    throw new ImageTooSmallError(required, available);
+  if (required > available + HEADER_SIZE) {
+    throw new ImageTooSmallError(required, available + HEADER_SIZE);
   }
 
   const encrypted = await encryptMessage(message, secret);
-  const stegoBytes = buildStegoPayload(encrypted);
-
   assertImageFits(image, encrypted.length);
 
-  const newData = embedBytesInImage(image.data, stegoBytes);
+  const totalPixels = image.width * image.height;
+  const offsetPixels = pickRandomOffset(totalPixels, HEADER_SIZE + encrypted.length);
+  const stegoBytes = buildStegoPayload(encrypted, offsetPixels);
+  const bootstrap = writeOffsetBootstrap(offsetPixels);
+
+  let newData = embedBytesInImage(image.data, bootstrap, 0);
+  newData = embedBytesInImage(newData, stegoBytes, offsetPixels * 4);
+
   const resultImage: RgbaImage = {
     width: image.width,
     height: image.height,
@@ -89,31 +102,81 @@ export async function embedMessageInImage(
   };
 
   const pngBlob = await rgbaToPngBlob(resultImage);
-  return { pngBlob, image: resultImage };
+  return { pngBlob, image: resultImage, offsetPixels };
+}
+
+function resolveStegoLocation(image: RgbaImage): {
+  offsetPixels: number;
+  headerInfo: NonNullable<ReturnType<typeof readHeader>>;
+} {
+  const totalPixels = image.width * image.height;
+
+  // Legacy v1: header starts at pixel (0,0)
+  const legacyHeaderBytes = extractBytesFromImage(image.data, HEADER_SIZE_V1, 0);
+  const legacyHeader = readHeader(legacyHeaderBytes);
+  if (legacyHeader?.version === VERSION_V1) {
+    const headerSize = headerSizeFor(VERSION_V1);
+    const totalBytes = headerSize + legacyHeader.payloadLength;
+    const maxAvailable = getMaxPayloadBytes(image.width, image.height) + headerSize;
+    if (totalBytes <= maxAvailable) {
+      return { offsetPixels: 0, headerInfo: legacyHeader };
+    }
+  }
+
+  // v2: bootstrap at LSB stream start → main header at offsetPixels
+  const bootstrapBytes = extractBytesFromImage(
+    image.data,
+    OFFSET_BOOTSTRAP_SIZE,
+    0,
+  );
+  const offsetPixels = readOffsetBootstrap(bootstrapBytes);
+
+  if (offsetPixels >= totalPixels) {
+    throw new DecryptError('Invalid offset bootstrap in image');
+  }
+
+  const headerSize = headerSizeFor(VERSION);
+  const headerBytes = extractBytesFromImage(
+    image.data,
+    headerSize,
+    offsetPixels * 4,
+  );
+  const headerInfo = readHeader(headerBytes);
+
+  if (!headerInfo || headerInfo.version !== VERSION) {
+    throw new DecryptError(
+      'No hidden message found in this image (invalid or missing stego header)',
+    );
+  }
+
+  if (headerInfo.offsetPixels !== offsetPixels) {
+    throw new DecryptError('Stego header offset mismatch — image may be corrupted');
+  }
+
+  return { offsetPixels, headerInfo };
 }
 
 export async function extractMessageFromImage(
   image: RgbaImage,
   secret: string,
 ): Promise<string> {
-  const headerBytes = extractBytesFromImage(image.data, HEADER_SIZE);
-  const headerInfo = readHeader(headerBytes);
+  const { offsetPixels, headerInfo } = resolveStegoLocation(image);
+  const headerSize = headerSizeFor(headerInfo.version);
+  const totalBytes = headerSize + headerInfo.payloadLength;
+  const totalPixels = image.width * image.height;
+  const maxAvailable =
+    (totalPixels - offsetPixels) * 3 >= totalBytes * 8;
 
-  if (!headerInfo) {
-    throw new DecryptError(
-      'No hidden message found in this image (invalid or missing stego header)',
-    );
-  }
-
-  const totalBytes = HEADER_SIZE + headerInfo.payloadLength;
-  const maxAvailable = getMaxPayloadBytes(image.width, image.height) + HEADER_SIZE;
-
-  if (totalBytes > maxAvailable) {
+  if (!maxAvailable) {
     throw new DecryptError('Corrupted stego header — payload length exceeds image capacity');
   }
 
-  const fullPayload = extractBytesFromImage(image.data, totalBytes);
-  const encrypted = parseStegoPayload(fullPayload);
+  const fullPayload = extractBytesFromImage(
+    image.data,
+    totalBytes,
+    offsetPixels * 4,
+  );
+  const encrypted = parseStegoPayload(fullPayload, headerInfo);
 
   if (!encrypted) {
     throw new DecryptError('Failed to parse hidden payload');
@@ -142,10 +205,12 @@ export async function encryptToFile(
 
 export {
   getCapacityInfo,
+  getCapacityBytes,
   getMaxPayloadBytes,
   getMaxMessageLength,
   getMinimumDimensions,
   bytesRequiredForMessage,
+  getMaxOffsetForPayload,
 } from './capacity';
 
 export { encryptMessage, decryptMessage } from './crypto';
@@ -154,6 +219,11 @@ export {
   extractBytesFromImage,
   buildStegoPayload,
   parseStegoPayload,
+  pickRandomOffset,
+  readHeader,
+  writeHeader,
+  readOffsetBootstrap,
+  writeOffsetBootstrap,
 } from './stego';
 
 export * from './types';
