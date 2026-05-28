@@ -166,6 +166,15 @@ body {
   object-fit: contain;
 }
 
+.waveform-preview {
+  width: 200px;
+  height: 80px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(7, 8, 13, 0.5);
+  flex-shrink: 0;
+}
+
 .meta {
   font-size: 0.8rem;
   color: var(--muted);

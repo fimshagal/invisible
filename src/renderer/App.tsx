@@ -12,7 +12,7 @@ export default function App() {
       <header className="header">
         <h1>Invisible</h1>
         <p className="subtitle">
-          Hide encrypted messages inside images (LSB steganography + AES-256-GCM)
+          Hide encrypted messages inside images or audio (LSB steganography + AES-256-GCM)
         </p>
         <nav className="tabs">
           <button

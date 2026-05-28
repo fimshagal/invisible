@@ -1,23 +1,40 @@
 import { useCallback, useState } from 'react';
 import {
-  embedMessageInImage,
+  embedMessageInMedia,
   loadImageFromFile,
+  loadAudioFromFile,
+  detectMediaKind,
   getCapacityInfo,
+  getAudioCapacityInfo,
   getMinimumDimensions,
+  getMinimumAudioDuration,
   bytesRequiredForMessage,
   getCapacityBytes,
+  getAudioCapacityBytes,
   type RgbaImage,
+  type MediaKind,
+  type LoadedAudio,
 } from '@stego-crypto/index';
+import { WaveformPreview } from './WaveformPreview';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   return `${(n / 1024).toFixed(1)} KB`;
 }
 
+function formatDuration(sec: number): string {
+  if (sec < 60) return `${sec.toFixed(1)}s`;
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export function EncryptPanel() {
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaKind, setMediaKind] = useState<MediaKind | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [imageInfo, setImageInfo] = useState<RgbaImage | null>(null);
+  const [audioInfo, setAudioInfo] = useState<LoadedAudio | null>(null);
   const [secret, setSecret] = useState('');
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<{ type: 'idle' | 'loading' | 'ok' | 'err'; text: string }>({
@@ -25,38 +42,54 @@ export function EncryptPanel() {
     text: '',
   });
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultExt, setResultExt] = useState<'png' | 'wav'>('png');
 
-  const onImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onMediaChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setImageFile(file);
+    const kind = detectMediaKind(file);
+    setMediaFile(file);
+    setMediaKind(kind);
     setResultUrl(null);
     setStatus({ type: 'idle', text: '' });
+    setImageInfo(null);
+    setAudioInfo(null);
 
-    const url = URL.createObjectURL(file);
-    setPreview(url);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(URL.createObjectURL(file));
 
     try {
-      const img = await loadImageFromFile(file);
-      setImageInfo(img);
+      if (kind === 'audio') {
+        const loaded = await loadAudioFromFile(file);
+        setAudioInfo(loaded);
+      } else {
+        const img = await loadImageFromFile(file);
+        setImageInfo(img);
+      }
     } catch {
-      setImageInfo(null);
-      setStatus({ type: 'err', text: 'Failed to read image' });
+      setStatus({ type: 'err', text: 'Failed to read file' });
     }
-  }, []);
+  }, [preview]);
 
-  const capacity = imageInfo ? getCapacityInfo(imageInfo.width, imageInfo.height) : null;
+  const imageCapacity = imageInfo ? getCapacityInfo(imageInfo.width, imageInfo.height) : null;
+  const audioCapacity = audioInfo ? getAudioCapacityInfo(audioInfo.pcm) : null;
+
   const messageBytes = new TextEncoder().encode(message).length;
   const requiredBytes = message ? bytesRequiredForMessage(messageBytes) : 0;
-  const minDims = message ? getMinimumDimensions(messageBytes) : null;
-  const fits =
-    capacity && message
-      ? requiredBytes <= getCapacityBytes(imageInfo!.width, imageInfo!.height)
-      : true;
+
+  const availableBytes =
+    mediaKind === 'audio' && audioInfo
+      ? getAudioCapacityBytes(audioInfo.pcm)
+      : mediaKind === 'image' && imageInfo
+        ? getCapacityBytes(imageInfo.width, imageInfo.height)
+        : 0;
+
+  const fits = message && availableBytes > 0 ? requiredBytes <= availableBytes : true;
 
   const handleEncrypt = async () => {
-    if (!imageFile || !imageInfo || !secret || !message) {
+    const source = mediaKind === 'audio' ? audioInfo?.pcm : imageInfo;
+    if (!mediaFile || !mediaKind || !source || !secret || !message) {
       setStatus({ type: 'err', text: 'Please fill in all fields' });
       return;
     }
@@ -64,11 +97,18 @@ export function EncryptPanel() {
     setStatus({ type: 'loading', text: 'Encrypting…' });
 
     try {
-      const { pngBlob } = await embedMessageInImage(imageInfo, message, secret);
+      const result = await embedMessageInMedia(mediaKind, source, message, secret);
       if (resultUrl) URL.revokeObjectURL(resultUrl);
-      const url = URL.createObjectURL(pngBlob);
+      const url = URL.createObjectURL(result.blob);
       setResultUrl(url);
-      setStatus({ type: 'ok', text: 'Done! Save the PNG — always use PNG when sharing.' });
+      setResultExt(result.extension);
+
+      const doneMsg =
+        result.kind === 'audio'
+          ? 'Done! Save the WAV — output is always WAV (lossless) to preserve hidden data.'
+          : 'Done! Save the PNG — always use PNG when sharing.';
+
+      setStatus({ type: 'ok', text: doneMsg });
     } catch (err) {
       setStatus({
         type: 'err',
@@ -81,25 +121,49 @@ export function EncryptPanel() {
     if (!resultUrl) return;
     const a = document.createElement('a');
     a.href = resultUrl;
-    a.download = `invisible-${Date.now()}.png`;
+    a.download = `invisible-${Date.now()}.${resultExt}`;
     a.click();
   };
 
   return (
     <section className="panel">
       <div className="field">
-        <label htmlFor="enc-image">Image (PNG / JPEG / WebP…)</label>
-        <input id="enc-image" type="file" accept="image/*" onChange={onImageChange} />
-        {preview && (
+        <label htmlFor="enc-media">Image or audio (PNG / JPEG / WAV / MP3 / OGG / FLAC…)</label>
+        <input
+          id="enc-media"
+          type="file"
+          accept="image/*,audio/*,.mp3,.ogg,.flac,.m4a,.aac,.opus,.wav"
+          onChange={onMediaChange}
+        />
+        {(preview || audioInfo) && (
           <div className="preview-row">
-            <img src={preview} alt="Preview" className="preview" />
-            {capacity && (
+            {mediaKind === 'audio' && audioInfo ? (
+              <WaveformPreview audioBuffer={audioInfo.audioBuffer} />
+            ) : (
+              preview && <img src={preview} alt="Preview" className="preview" />
+            )}
+            {imageCapacity && imageInfo && (
               <div className="meta">
                 <p>
-                  {imageInfo!.width}×{imageInfo!.height} px — capacity ~{' '}
-                  {formatBytes(capacity.maxPayloadBytes)} of data
+                  {imageInfo.width}×{imageInfo.height} px — capacity ~{' '}
+                  {formatBytes(imageCapacity.maxPayloadBytes)} of data
                 </p>
-                <p>Max message length: ~{capacity.maxMessageChars} characters</p>
+                <p>Max message length: ~{imageCapacity.maxMessageChars} characters</p>
+              </div>
+            )}
+            {audioCapacity && audioInfo && (
+              <div className="meta">
+                <p>
+                  {formatDuration(audioCapacity.durationSec)} · {audioCapacity.sampleRate} Hz ·{' '}
+                  {audioCapacity.channels} ch — capacity ~{' '}
+                  {formatBytes(audioCapacity.maxPayloadBytes)}
+                </p>
+                <p>Max message length: ~{audioCapacity.maxMessageChars} characters</p>
+                {mediaKind === 'audio' &&
+                  !fileIsWav(mediaFile) &&
+                  mediaFile && (
+                    <p className="hint">Input will be decoded and saved as WAV.</p>
+                  )}
               </div>
             )}
           </div>
@@ -124,20 +188,31 @@ export function EncryptPanel() {
           id="enc-message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Text to hide inside the image"
+          placeholder="Text to hide inside the file"
           rows={4}
         />
-        {message && minDims && !fits && (
+        {message && !fits && mediaKind === 'image' && imageInfo && (
           <p className="hint warn">
-            Image too small. Need at least ~{minDims.minSide}×{minDims.minSide} px (
-            {minDims.minPixels.toLocaleString()} pixels).
+            {(() => {
+              const min = getMinimumDimensions(messageBytes);
+              return `Image too small. Need at least ~${min.minSide}×${min.minSide} px (${min.minPixels.toLocaleString()} pixels).`;
+            })()}
           </p>
         )}
-        {message && capacity && fits && (
+        {message && !fits && mediaKind === 'audio' && audioInfo && (
+          <p className="hint warn">
+            Audio too short. Need at least ~
+            {getMinimumAudioDuration(
+              messageBytes,
+              audioInfo.pcm.sampleRate,
+              audioInfo.pcm.channels,
+            ).toFixed(1)}
+            s for this message.
+          </p>
+        )}
+        {message && fits && availableBytes > 0 && (
           <p className="hint">
-            Requires {formatBytes(requiredBytes)} of{' '}
-            {formatBytes(getCapacityBytes(imageInfo!.width, imageInfo!.height))} available
-            (up to {capacity.maxOffsetPixels} px offset reserved)
+            Requires {formatBytes(requiredBytes)} of {formatBytes(availableBytes)} available
           </p>
         )}
       </div>
@@ -148,7 +223,7 @@ export function EncryptPanel() {
         </button>
         {resultUrl && (
           <button type="button" className="btn secondary" onClick={handleDownload}>
-            Download PNG
+            Download {resultExt.toUpperCase()}
           </button>
         )}
       </div>
@@ -160,4 +235,10 @@ export function EncryptPanel() {
       )}
     </section>
   );
+}
+
+function fileIsWav(file: File | null): boolean {
+  if (!file) return false;
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  return ext === 'wav' || file.type.includes('wav');
 }

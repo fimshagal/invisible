@@ -1,9 +1,19 @@
 import { useCallback, useState } from 'react';
-import { decryptFromFile, loadImageFromFile } from '@stego-crypto/index';
+import {
+  decryptFromFile,
+  loadImageFromFile,
+  loadAudioFromFile,
+  detectMediaKind,
+  type MediaKind,
+  type LoadedAudio,
+} from '@stego-crypto/index';
+import { WaveformPreview } from './WaveformPreview';
 
 export function DecryptPanel() {
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaKind, setMediaKind] = useState<MediaKind | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [audioInfo, setAudioInfo] = useState<LoadedAudio | null>(null);
   const [secret, setSecret] = useState('');
   const [result, setResult] = useState<string | null>(null);
   const [status, setStatus] = useState<{ type: 'idle' | 'loading' | 'ok' | 'err'; text: string }>({
@@ -11,27 +21,35 @@ export function DecryptPanel() {
     text: '',
   });
 
-  const onImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onMediaChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setImageFile(file);
+    const kind = detectMediaKind(file);
+    setMediaFile(file);
+    setMediaKind(kind);
     setResult(null);
     setStatus({ type: 'idle', text: '' });
+    setAudioInfo(null);
 
-    const url = URL.createObjectURL(file);
-    setPreview(url);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(URL.createObjectURL(file));
 
     try {
-      await loadImageFromFile(file);
+      if (kind === 'audio') {
+        const loaded = await loadAudioFromFile(file);
+        setAudioInfo(loaded);
+      } else {
+        await loadImageFromFile(file);
+      }
     } catch {
-      setStatus({ type: 'err', text: 'Failed to read image' });
+      setStatus({ type: 'err', text: 'Failed to read file' });
     }
-  }, []);
+  }, [preview]);
 
   const handleDecrypt = async () => {
-    if (!imageFile || !secret) {
-      setStatus({ type: 'err', text: 'Add an image and secret key' });
+    if (!mediaFile || !secret) {
+      setStatus({ type: 'err', text: 'Add a file and secret key' });
       return;
     }
 
@@ -39,7 +57,7 @@ export function DecryptPanel() {
     setResult(null);
 
     try {
-      const text = await decryptFromFile(imageFile, secret);
+      const text = await decryptFromFile(mediaFile, secret);
       setResult(text);
       setStatus({ type: 'ok', text: 'Message found!' });
     } catch (err) {
@@ -53,9 +71,22 @@ export function DecryptPanel() {
   return (
     <section className="panel">
       <div className="field">
-        <label htmlFor="dec-image">Image with hidden message</label>
-        <input id="dec-image" type="file" accept="image/*" onChange={onImageChange} />
-        {preview && <img src={preview} alt="Preview" className="preview" />}
+        <label htmlFor="dec-media">Image or audio with hidden message</label>
+        <input
+          id="dec-media"
+          type="file"
+          accept="image/*,audio/*,.mp3,.ogg,.flac,.m4a,.aac,.opus,.wav"
+          onChange={onMediaChange}
+        />
+        {(preview || audioInfo) && (
+          <div className="preview-row">
+            {mediaKind === 'audio' && audioInfo ? (
+              <WaveformPreview audioBuffer={audioInfo.audioBuffer} />
+            ) : (
+              preview && <img src={preview} alt="Preview" className="preview" />
+            )}
+          </div>
+        )}
       </div>
 
       <div className="field">

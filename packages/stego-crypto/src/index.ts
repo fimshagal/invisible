@@ -1,5 +1,10 @@
 import { encryptMessage, decryptMessage } from './crypto';
 import {
+  loadAudioFromFile,
+  embedMessageInAudio,
+  extractMessageFromAudio,
+} from './audio';
+import {
   buildStegoPayload,
   embedBytesInImage,
   extractBytesFromImage,
@@ -27,6 +32,7 @@ import {
   type RgbaImage,
   DecryptError,
 } from './types';
+import type { PcmAudio } from './audio-types';
 
 const encoder = new TextEncoder();
 
@@ -189,6 +195,11 @@ export async function decryptFromFile(
   file: File | Blob,
   secret: string,
 ): Promise<string> {
+  if (detectMediaKind(file) === 'audio') {
+    const { pcm } = await loadAudioFromFile(file);
+    return extractMessageFromAudio(pcm, secret);
+  }
+
   const image = await loadImageFromFile(file);
   return extractMessageFromImage(image, secret);
 }
@@ -198,9 +209,56 @@ export async function encryptToFile(
   message: string,
   secret: string,
 ): Promise<Blob> {
+  const kind = detectMediaKind(file);
+
+  if (kind === 'audio') {
+    const { pcm } = await loadAudioFromFile(file);
+    const { wavBlob } = await embedMessageInAudio(pcm, message, secret);
+    return wavBlob;
+  }
+
   const image = await loadImageFromFile(file);
   const { pngBlob } = await embedMessageInImage(image, message, secret);
   return pngBlob;
+}
+
+export type MediaKind = 'image' | 'audio';
+
+export interface MediaEmbedResult {
+  kind: MediaKind;
+  blob: Blob;
+  extension: 'png' | 'wav';
+}
+
+export function detectMediaKind(
+  file: File | Blob & { name?: string; type?: string },
+): MediaKind {
+  const type = 'type' in file ? file.type : '';
+  if (type.startsWith('audio/')) return 'audio';
+  if (type.startsWith('image/')) return 'image';
+
+  const name = ('name' in file ? file.name : '') ?? '';
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  if (['wav', 'mp3', 'ogg', 'flac', 'm4a', 'aac', 'webm', 'opus'].includes(ext)) {
+    return 'audio';
+  }
+
+  return 'image';
+}
+
+export async function embedMessageInMedia(
+  kind: MediaKind,
+  source: RgbaImage | PcmAudio,
+  message: string,
+  secret: string,
+): Promise<MediaEmbedResult> {
+  if (kind === 'audio') {
+    const { wavBlob } = await embedMessageInAudio(source as PcmAudio, message, secret);
+    return { kind: 'audio', blob: wavBlob, extension: 'wav' };
+  }
+
+  const { pngBlob } = await embedMessageInImage(source as RgbaImage, message, secret);
+  return { kind: 'image', blob: pngBlob, extension: 'png' };
 }
 
 export {
@@ -225,5 +283,20 @@ export {
   readOffsetBootstrap,
   writeOffsetBootstrap,
 } from './stego';
+
+export {
+  loadAudioFromFile,
+  embedMessageInAudio,
+  extractMessageFromAudio,
+  pcmToWavBlob,
+  audioBufferToPcm,
+  getAudioCapacityInfo,
+  getAudioCapacityBytes,
+  getAudioMaxPayloadBytes,
+  getAudioMaxMessageLength,
+  getMinimumAudioDuration,
+} from './audio';
+
+export * from './audio-types';
 
 export * from './types';
