@@ -105,8 +105,8 @@ export function EncryptPanel() {
 
       const doneMsg =
         result.kind === 'audio'
-          ? 'Done! Save the WAV — output is always WAV (lossless) to preserve hidden data.'
-          : 'Done! Save the PNG — always use PNG when sharing.';
+          ? 'Done! Download the file below — output is always WAV (lossless) to preserve hidden data.'
+          : 'Done! Download the file below — always share as PNG (JPEG recompression destroys the payload).';
 
       setStatus({ type: 'ok', text: doneMsg });
     } catch (err) {
@@ -223,7 +223,7 @@ export function EncryptPanel() {
         </button>
         {resultUrl && (
           <button type="button" className="btn secondary" onClick={handleDownload}>
-            Download {resultExt.toUpperCase()}
+            Download file
           </button>
         )}
       </div>
