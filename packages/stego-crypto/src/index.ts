@@ -28,60 +28,26 @@ import {
   OFFSET_BOOTSTRAP_SIZE,
   VERSION,
   VERSION_V1,
+  BITS_PER_PIXEL,
   type EmbedResult,
   type RgbaImage,
   DecryptError,
 } from './types';
 import type { PcmAudio } from './audio-types';
-import { flattenAlphaOntoWhite } from './image-normalize';
+import {
+  encodePngBytes,
+  loadImageFromBytes,
+} from './png-io';
 
 const encoder = new TextEncoder();
 
 export async function loadImageFromFile(file: File | Blob): Promise<RgbaImage> {
-  const bitmap = await createImageBitmap(file, {
-    premultiplyAlpha: 'none',
-    colorSpaceConversion: 'none',
-  });
-  const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new Error('Canvas 2D not available');
-
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
-
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = new Uint8ClampedArray(imageData.data);
-  flattenAlphaOntoWhite(data);
-
-  return {
-    width: canvas.width,
-    height: canvas.height,
-    data,
-  };
+  return loadImageFromBytes(new Uint8Array(await file.arrayBuffer()));
 }
 
 export async function rgbaToPngBlob(image: RgbaImage): Promise<Blob> {
-  const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas 2D not available');
-
-  const imageData = new ImageData(
-    new Uint8ClampedArray(image.data),
-    image.width,
-    image.height,
-  );
-  ctx.putImageData(imageData, 0, 0);
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('PNG export failed'))),
-      'image/png',
-    );
-  });
+  const png = encodePngBytes(image);
+  return new Blob([Uint8Array.from(png)], { type: 'image/png' });
 }
 
 export async function embedMessageInImage(
@@ -178,7 +144,7 @@ export async function extractMessageFromImage(
   const totalBytes = headerSize + headerInfo.payloadLength;
   const totalPixels = image.width * image.height;
   const maxAvailable =
-    (totalPixels - offsetPixels) * 3 >= totalBytes * 8;
+    (totalPixels - offsetPixels) * BITS_PER_PIXEL >= totalBytes * 8;
 
   if (!maxAvailable) {
     throw new DecryptError('Corrupted stego header — payload length exceeds image capacity');
@@ -305,7 +271,5 @@ export {
 } from './audio';
 
 export * from './audio-types';
-
-export { flattenAlphaOntoWhite, normalizeTransparentPixels } from './image-normalize';
 
 export * from './types';

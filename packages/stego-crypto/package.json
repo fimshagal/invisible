@@ -8,5 +8,8 @@
     ".": "./src/index.ts"
   },
   "keywords": ["steganography", "encryption", "aes", "lsb"],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "fast-png": "^8.0.0"
+  }
 }
