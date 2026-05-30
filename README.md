@@ -1,75 +1,73 @@
 # Invisible
 
-Desktop-додаток для **приховування зашифрованих повідомлень у зображеннях** (steganography). Повідомлення шифрується AES-256-GCM з ключем, похідним від вашого таємного рядка (PBKDF2), і вбудовується в молодші біти RGB-каналів пікселів — візуально зображення майже не змінюється.
+Desktop app for **hiding encrypted messages in images** (steganography). Messages are encrypted with AES-256-GCM using a key derived from your secret string (PBKDF2), and embedded in the least significant bits of RGB pixel channels — the image looks almost unchanged.
 
-## Стек
+## Stack
 
 - [Electron](https://www.electronjs.org/) + [Electron Forge](https://www.electronforge.io/) (Vite plugin)
-- TypeScript + React
-- Окремий переносний модуль `@invisible/stego-crypto` у `packages/stego-crypto/`
+- React
+- Standalone portable module `@invisible/stego-crypto` in `packages/stego-crypto/`
 
-## Вимоги
+## Requirements
 
 - Node.js 18+
 - npm
 
-## Запуск
+## Getting started
 
 ```bash
-# Встановити залежності
+# Install dependencies
 npm install
 
-# Запустити в режимі розробки
+# Run in development mode
 npm start
 ```
 
-При повторному запуску додатку відкривається **вже існуюче вікно** (single-instance lock).
-
-## Збірка
+## Build
 
 ```bash
-# Упакувати додаток
+# Package the app
 npm run package
 
-# Створити інсталятор (Windows — Squirrel)
+# Create an installer (Windows — Squirrel)
 npm run make
 ```
 
-## Як користуватися
+## Usage
 
-### Шифрування
+### Encryption
 
-1. Вкладка **Шифрування**
-2. Оберіть зображення (PNG, JPEG, WebP…)
-3. Введіть **таємний ключ** (будь-який рядок)
-4. Введіть **повідомлення**
-5. Натисніть «Зашифрувати і сховати»
-6. **Завантажте PNG** — саме PNG потрібен для збереження прихованих даних (JPEG стискає і може знищити payload)
+1. Open the **Encryption** tab
+2. Choose an asset (PNG, JPEG, WebP…)
+3. Enter your **secret key** (any string)
+4. Enter your **message**
+5. Click “Encrypt and hide”
+6. **Download the PNG** — PNG is required to preserve hidden data (JPEG compression may destroy the payload)
 
-### Дешифрування
+### Decryption
 
-1. Вкладка **Дешифрування**
-2. Завантажте PNG (або інше зображення, якщо дані не пошкоджені)
-3. Введіть той самий **таємний ключ**
-4. Отримайте розшифроване повідомлення
+1. Open the **Decryption** tab
+2. Upload a PNG (or another image if the data is intact)
+3. Enter the same **secret key**
+4. View the decrypted message
 
-## Місткість зображення
+## Image capacity
 
-Дані ховаються в **3 молодших біта на піксель** (R, G, B). Мінімальний розмір залежить від довжини повідомлення:
+Data is hidden in **3 least significant bits per pixel** (R, G, B). Minimum image size depends on message length:
 
-| Компонент | Розмір |
-|-----------|--------|
-| Заголовок (magic + version + length) | 9 байт |
-| Шифрування (salt + IV + GCM tag + ciphertext) | 44+ байт |
-| Повідомлення | UTF-8 байти |
+| Component | Size |
+|-----------|------|
+| Header (magic + version + length) | 9 bytes |
+| Encryption (salt + IV + GCM tag + ciphertext) | 44+ bytes |
+| Message | UTF-8 bytes |
 
-Формула: `потрібні_пікселі = ceil((9 + 44 + len(message)) × 8 / 3)`
+Formula: `required_pixels = ceil((9 + 44 + len(message)) × 8 / 3)`
 
-Інтерфейс показує попередження, якщо зображення замале, і орієнтовну максимальну довжину повідомлення для обраного файлу.
+The UI shows a warning if the image is too small, and an approximate maximum message length for the selected file.
 
-## Переносний модуль дешифрування
+## Portable decryption module
 
-Папку `packages/stego-crypto/` можна скопіювати в інший проєкт. Модуль використовує **Web Crypto API** і **Canvas** — працює в браузері та Electron renderer.
+Copy the `packages/stego-crypto/` folder into another project. The module uses the **Web Crypto API** and **Canvas** — it works in the browser and Electron renderer.
 
 ```typescript
 import {
@@ -81,27 +79,27 @@ import {
   getCapacityInfo,
 } from '@invisible/stego-crypto';
 
-// Дешифрування з File/Blob
+// Decrypt from File/Blob
 const message = await decryptFromFile(imageFile, 'my-secret-key');
 
-// Шифрування → PNG Blob
+// Encrypt → PNG Blob
 const pngBlob = await encryptToFile(imageFile, 'Hello!', 'my-secret-key');
 ```
 
-Низькорівневі функції (`decryptMessage`, `embedBytesInImage`, `extractBytesFromImage`) також експортуються для кастомної інтеграції.
+Low-level functions (`decryptMessage`, `embedBytesInImage`, `extractBytesFromImage`) are also exported for custom integration.
 
-## Безпека
+## Security
 
-- AES-256-GCM (аутентифіковане шифрування)
-- PBKDF2-SHA256, 100 000 ітерацій для деривації ключа
-- LSB steganography — приховує факт наявності даних від casual перегляду, але **не є криптографічним захистом самого факту стеганографії**
+- AES-256-GCM (authenticated encryption)
+- PBKDF2-SHA256, 100,000 iterations for key derivation
+- LSB steganography — hides the presence of data from casual viewing, but **does not cryptographically conceal the fact of steganography itself**
 
-## Структура проєкту
+## Project structure
 
 ```
 invisible/
 ├── forge.config.ts          # Electron Forge
-├── packages/stego-crypto/   # Переносний модуль
+├── packages/stego-crypto/   # Portable module
 ├── src/
 │   ├── main.ts              # Main process (single instance)
 │   ├── preload.ts
@@ -109,6 +107,6 @@ invisible/
 └── vite.*.config.ts
 ```
 
-## Ліцензія
+## License
 
 MIT
